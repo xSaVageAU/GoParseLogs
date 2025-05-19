@@ -3,6 +3,7 @@ package macros
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-vgo/robotgo"
@@ -98,7 +99,7 @@ func RegisterHelloWorldMacro() {
 func RegisterCoreProtectPagerMacro() {
 	RegisterMacro(Macro{
 		Name:        "CoreProtect Pager",
-		Description: "Runs /co page X commands from a start page to an end page.",
+		Description: "Runs /co lookup with parameters and then pages through results.",
 		Parameters: []MacroParameter{
 			{
 				Name:         "startPage",
@@ -115,6 +116,31 @@ func RegisterCoreProtectPagerMacro() {
 				Description:  "Delay in milliseconds between commands (optional)",
 				DefaultValue: "500",
 			},
+			{
+				Name:         "users",
+				Description:  "Comma-separated list of usernames to lookup (e.g., 'user1,user2')",
+				DefaultValue: "",
+			},
+			{
+				Name:         "actions",
+				Description:  "Comma-separated list of actions to lookup (e.g., 'block,chat')",
+				DefaultValue: "",
+			},
+			{
+				Name:         "radius",
+				Description:  "Radius for the lookup (optional)",
+				DefaultValue: "",
+			},
+			{
+				Name:         "time",
+				Description:  "Time parameter for lookup (e.g., '1d' for 1 day, '12h' for 12 hours)",
+				DefaultValue: "",
+			},
+			{
+				Name:         "skipLookup",
+				Description:  "Set to 'true' to skip the lookup command and only run page commands",
+				DefaultValue: "false",
+			},
 		},
 		Action: func(params map[string]string) error {
 			// Get required parameters
@@ -127,12 +153,16 @@ func RegisterCoreProtectPagerMacro() {
 			}
 
 			// Parse startPage parameter
+			// Trim null bytes in case they were included during input
+			startPageStr = strings.TrimRight(startPageStr, "\x00")
 			startPage, err := strconv.Atoi(startPageStr)
 			if err != nil {
 				return fmt.Errorf("invalid startPage: %w", err)
 			}
 
 			// Parse endPage parameter
+			// Trim null bytes in case they were included during input
+			endPageStr = strings.TrimRight(endPageStr, "\x00")
 			endPage, err := strconv.Atoi(endPageStr)
 			if err != nil {
 				return fmt.Errorf("invalid endPage: %w", err)
@@ -152,7 +182,86 @@ func RegisterCoreProtectPagerMacro() {
 				}
 			}
 
-			// Execute the commands
+			// Check if we should execute the lookup command
+			// We execute lookup if any of these parameters are present: users, actions, radius, time
+			shouldExecuteLookup := false
+			lookupCmd := "/co lookup"
+
+			// Create a separate map for lookup parameters to ensure no interference
+			lookupParams := make(map[string]string)
+
+			// Explicitly get and add lookup parameters if specified
+			if usersStr, ok := params["users"]; ok && usersStr != "" {
+				shouldExecuteLookup = true
+				lookupParams["users"] = usersStr
+			}
+
+			if actionsStr, ok := params["actions"]; ok && actionsStr != "" {
+				shouldExecuteLookup = true
+				lookupParams["actions"] = actionsStr
+			}
+
+			if radiusStr, ok := params["radius"]; ok && radiusStr != "" {
+				shouldExecuteLookup = true
+				lookupParams["radius"] = radiusStr
+			}
+
+			if timeStr, ok := params["time"]; ok && timeStr != "" {
+				shouldExecuteLookup = true
+				lookupParams["time"] = timeStr
+			}
+
+			// Build the lookup command string from the collected lookup parameters
+			if usersStr, ok := lookupParams["users"]; ok {
+				users := strings.Split(usersStr, ",")
+				for _, user := range users {
+					user = strings.TrimSpace(user)
+					if user != "" {
+						lookupCmd += fmt.Sprintf(" user:%s", user)
+					}
+				}
+			}
+
+			if actionsStr, ok := lookupParams["actions"]; ok {
+				actions := strings.Split(actionsStr, ",")
+				for _, action := range actions {
+					action = strings.TrimSpace(action)
+					if action != "" {
+						lookupCmd += fmt.Sprintf(" action:%s", action)
+					}
+				}
+			}
+
+			if radiusStr, ok := lookupParams["radius"]; ok {
+				lookupCmd += fmt.Sprintf(" r:%s", radiusStr)
+			}
+
+			if timeStr, ok := lookupParams["time"]; ok {
+				lookupCmd += fmt.Sprintf(" t:%s", timeStr)
+			}
+
+			// Execute the lookup command if needed
+			if shouldExecuteLookup {
+				fmt.Printf("Executing lookup command: %s\n", lookupCmd)
+
+				// Type the command
+				robotgo.TypeStr(lookupCmd)
+
+				// Press Enter to execute
+				robotgo.KeyTap("enter")
+
+				// Wait longer after the lookup command before paging
+				time.Sleep(time.Duration(delayMs*2) * time.Millisecond)
+
+				// Press 't' to open chat again for the first page command
+				fmt.Println("Opening chat window for page commands...")
+				robotgo.KeyTap("t")
+
+				// Wait a moment after opening chat
+				time.Sleep(100 * time.Millisecond)
+			}
+
+			// Execute the page commands
 			fmt.Printf("Running CoreProtect pager from page %d to %d with %dms delay\n",
 				startPage, endPage, delayMs)
 

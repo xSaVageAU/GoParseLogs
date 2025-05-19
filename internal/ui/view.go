@@ -36,6 +36,12 @@ func View(m models.Model) string {
 	case models.MacroParameterInputView:
 		// For parameter input, we show only the parameter input view (no background)
 		finalView.WriteString(renderMacroParameterInputView(m, m.TermWidth)) // Full-width parameter input
+	case models.ParameterSelectionView:
+		// For parameter selection, we show only the parameter selection view (no background)
+		finalView.WriteString(renderParameterSelectionView(m, m.TermWidth)) // Full-width parameter selection
+	case models.ParameterValueInputView:
+		// For parameter value input, we show only the parameter value input view (no background)
+		finalView.WriteString(renderParameterValueInputView(m, m.TermWidth)) // Full-width parameter value input
 	case models.CountdownInputView:
 		// For countdown input, we use a modal overlay
 		finalView.WriteString(renderLogView(m)) // Render the background

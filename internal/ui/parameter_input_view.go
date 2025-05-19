@@ -12,6 +12,7 @@ import (
 
 // renderMacroParameterInputView renders the parameter input view as a full-screen modal
 // showing all parameters at once with the ability to tab through them
+// For CoreProtect Pager, it also shows active parameters and a button to add more parameters
 func renderMacroParameterInputView(m models.Model, width int) string {
 	var view strings.Builder
 
@@ -49,26 +50,51 @@ func renderMacroParameterInputView(m models.Model, width int) string {
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
 	modalContent.WriteString(titleStyle.Render(fmt.Sprintf("Configure Macro: %s\n\n", m.SelectedMacroName)))
 
-	// Description
-	modalContent.WriteString(fmt.Sprintf("Description: %s\n\n", selectedMacro.Description))
+	// Description - more compact
+	modalContent.WriteString(fmt.Sprintf("%s\n", selectedMacro.Description))
+
+	// Special handling for CoreProtect Pager
+	if selectedMacro.Name == "CoreProtect Pager" {
+		// Show paging parameters
+		modalContent.WriteString("Paging Parameters:\n")
+	}
 
 	// No parameters case
 	if len(selectedMacro.Parameters) == 0 {
 		modalContent.WriteString("This macro has no parameters.\n\n")
 	} else {
 		// Show all parameters as a form
-		modalContent.WriteString("Parameters:\n\n")
+		if selectedMacro.Name != "CoreProtect Pager" {
+			modalContent.WriteString("Parameters:\n\n")
+		}
 
 		// Calculate max parameter name length for alignment
 		maxNameLength := 0
-		for _, param := range selectedMacro.Parameters {
-			if len(param.Name) > maxNameLength {
-				maxNameLength = len(param.Name)
+		var coreProtectParams []macros.MacroParameter
+
+		// For CoreProtect Pager, only show the 3 required fields
+		if selectedMacro.Name == "CoreProtect Pager" {
+			// Only include startPage, endPage, and delayMs
+			for _, param := range selectedMacro.Parameters {
+				if param.Name == "startPage" || param.Name == "endPage" || param.Name == "delayMs" {
+					coreProtectParams = append(coreProtectParams, param)
+					if len(param.Name) > maxNameLength {
+						maxNameLength = len(param.Name)
+					}
+				}
+			}
+		} else {
+			// For other macros, show all parameters
+			coreProtectParams = selectedMacro.Parameters
+			for _, param := range selectedMacro.Parameters {
+				if len(param.Name) > maxNameLength {
+					maxNameLength = len(param.Name)
+				}
 			}
 		}
 
 		// Render each parameter field
-		for i, param := range selectedMacro.Parameters {
+		for i, param := range coreProtectParams {
 			// Get the current input value for this parameter
 			inputValue, exists := m.ParameterInputs[param.Name]
 			if !exists {
@@ -92,12 +118,10 @@ func renderMacroParameterInputView(m models.Model, width int) string {
 				paddedName = paddedName + strings.Repeat(" ", maxNameLength-len(paddedName))
 			}
 
-			modalContent.WriteString(paramNameStyle.Render(paddedName) + ": ")
+			// Parameter name on its own line
+			modalContent.WriteString(paramNameStyle.Render(paddedName) + ":\n")
 
-			// Parameter description
-			modalContent.WriteString(param.Description + "\n")
-
-			// Input field
+			// Input field on next line
 			inputStyle := m.InputStyle
 			if i == m.ParameterCursor && m.InputActive {
 				inputStyle = m.FocusedInputStyle
@@ -115,15 +139,85 @@ func renderMacroParameterInputView(m models.Model, width int) string {
 		}
 	}
 
-	// Show any validation message
+	// Show any validation or success message
 	if m.ParameterMessage != "" {
-		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-		modalContent.WriteString(errorStyle.Render(m.ParameterMessage) + "\n\n")
+		if strings.HasPrefix(m.ParameterMessage, "SUCCESS:") {
+			// Success message in green
+			successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+			modalContent.WriteString(successStyle.Render(m.ParameterMessage) + "\n\n")
+		} else {
+			// Error message in red
+			errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+			modalContent.WriteString(errorStyle.Render(m.ParameterMessage) + "\n\n")
+		}
+	}
+
+	// Show active parameters list if it's CoreProtect Pager
+	if selectedMacro.Name == "CoreProtect Pager" {
+		// Create a more compact box for active parameters
+		activeParamsStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("63")).
+			Padding(0, 1).
+			MarginTop(1)
+
+		var activeParamsContent strings.Builder
+		activeParamsContent.WriteString("Active Parameters:\n")
+
+		// Check if we have any lookup parameters
+		hasLookupParams := false
+
+		// Create a style for active parameters
+		activeParamStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // Green color
+
+		// Show users if any
+		if users, ok := m.ParameterValues["users"]; ok && len(users) > 0 {
+			hasLookupParams = true
+			for _, user := range users {
+				activeParamsContent.WriteString(activeParamStyle.Render(fmt.Sprintf("• user: %s\n", user)))
+			}
+		}
+
+		// Show actions if any
+		if actions, ok := m.ParameterValues["actions"]; ok && len(actions) > 0 {
+			hasLookupParams = true
+			// Group actions on one line to save space
+			activeParamsContent.WriteString(activeParamStyle.Render("• actions: "))
+			for i, action := range actions {
+				if i > 0 {
+					activeParamsContent.WriteString(", ")
+				}
+				activeParamsContent.WriteString(activeParamStyle.Render(action))
+			}
+			activeParamsContent.WriteString("\n")
+		}
+
+		// Show radius if any
+		if radius, ok := m.MacroParameters["radius"]; ok && radius != "" {
+			hasLookupParams = true
+			activeParamsContent.WriteString(activeParamStyle.Render(fmt.Sprintf("• radius: %s\n", radius)))
+		}
+
+		// Show time if any
+		if timeParam, ok := m.MacroParameters["time"]; ok && timeParam != "" {
+			hasLookupParams = true
+			activeParamsContent.WriteString(activeParamStyle.Render(fmt.Sprintf("• time: %s\n", timeParam)))
+		}
+
+		if !hasLookupParams {
+			activeParamsContent.WriteString(m.SubtleStyle.Render("None\n"))
+		}
+
+		modalContent.WriteString(activeParamsStyle.Render(activeParamsContent.String()))
 	}
 
 	// Show help text
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	modalContent.WriteString("\n" + helpStyle.Render("TAB: Next field • SHIFT+TAB: Previous field • ENTER: Confirm • ESC: Cancel"))
+	if selectedMacro.Name == "CoreProtect Pager" {
+		modalContent.WriteString("\n" + helpStyle.Render("TAB: Next field • SHIFT+TAB: Previous field • CTRL+E: Add Parameter • ENTER: Confirm • ESC: Cancel"))
+	} else {
+		modalContent.WriteString("\n" + helpStyle.Render("TAB: Next field • SHIFT+TAB: Previous field • ENTER: Confirm • ESC: Cancel"))
+	}
 
 	// Render the modal and center it on screen
 	modal := modalStyle.Render(modalContent.String())

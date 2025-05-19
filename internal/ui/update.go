@@ -121,6 +121,10 @@ func Update(msg tea.Msg, m models.Model) (models.Model, tea.Cmd) {
 			return handleMacroListViewInput(msg, m)
 		case models.MacroParameterInputView:
 			return handleMacroParameterInputViewInput(msg, m)
+		case models.ParameterSelectionView:
+			return handleParameterSelectionViewInput(msg, m)
+		case models.ParameterValueInputView:
+			return handleParameterValueInputViewInput(msg, m)
 		case models.CountdownInputView:
 			return handleCountdownInputViewInput(msg, m)
 		case models.CountdownDisplayView:
@@ -163,14 +167,88 @@ func Update(msg tea.Msg, m models.Model) (models.Model, tea.Cmd) {
 		}
 		// Countdown complete - execute macro and return to menu
 		if m.SelectedMacroName != "" {
-			// Execute the selected macro with parameters
-			err := macros.ExecuteMacro(m.SelectedMacroName, m.MacroParameters)
-			if err != nil {
-				m.Err = err
+			// For CoreProtect Pager, use completely separate parameter maps
+			if m.SelectedMacroName == "CoreProtect Pager" {
+				// Create completely new maps for different parameter types
+				pagingParams := make(map[string]string)
+				lookupParams := make(map[string]string)
+
+				// Get paging parameters directly from input fields, not from MacroParameters
+				// This ensures they are clean and not corrupted
+				startPage, exists := m.ParameterInputs["startPage"]
+				if exists && startPage != "" {
+					pagingParams["startPage"] = startPage
+				} else {
+					pagingParams["startPage"] = "1" // Default
+				}
+
+				endPage, exists := m.ParameterInputs["endPage"]
+				if exists && endPage != "" {
+					pagingParams["endPage"] = endPage
+				} else {
+					pagingParams["endPage"] = "5" // Default
+				}
+
+				delayMs, exists := m.ParameterInputs["delayMs"]
+				if exists && delayMs != "" {
+					pagingParams["delayMs"] = delayMs
+				} else {
+					pagingParams["delayMs"] = "500" // Default
+				}
+
+				// Get lookup parameters from ParameterValues, not from MacroParameters
+				if users, ok := m.ParameterValues["users"]; ok && len(users) > 0 {
+					lookupParams["users"] = strings.Join(users, ",")
+				}
+
+				if actions, ok := m.ParameterValues["actions"]; ok && len(actions) > 0 {
+					lookupParams["actions"] = strings.Join(actions, ",")
+				}
+
+				// Combine parameters only at the last moment
+				finalParams := make(map[string]string)
+
+				// Add paging parameters
+				finalParams["startPage"] = pagingParams["startPage"]
+				finalParams["endPage"] = pagingParams["endPage"]
+				finalParams["delayMs"] = pagingParams["delayMs"]
+
+				// Add lookup parameters
+				if users, ok := lookupParams["users"]; ok {
+					finalParams["users"] = users
+				}
+
+				if actions, ok := lookupParams["actions"]; ok {
+					finalParams["actions"] = actions
+				}
+
+				// Get radius from ParameterValues if available
+				if radiusValues, ok := m.ParameterValues["radius"]; ok && len(radiusValues) > 0 {
+					finalParams["radius"] = radiusValues[0]
+				}
+
+				// Get time from ParameterValues if available
+				if timeValues, ok := m.ParameterValues["time"]; ok && len(timeValues) > 0 {
+					finalParams["time"] = timeValues[0]
+				}
+
+				// Execute with final parameters
+				err := macros.ExecuteMacro(m.SelectedMacroName, finalParams)
+				if err != nil {
+					m.Err = err
+				}
+			} else {
+				// For other macros, execute normally
+				err := macros.ExecuteMacro(m.SelectedMacroName, m.MacroParameters)
+				if err != nil {
+					m.Err = err
+				}
 			}
+
 			m.SelectedMacroName = ""
-			m.MacroParameters = make(map[string]string) // Clear parameters
-			m.ParameterInputs = make(map[string]string) // Clear parameter inputs
+			m.MacroParameters = make(map[string]string)   // Clear parameters
+			m.ParameterInputs = make(map[string]string)   // Clear parameter inputs
+			m.ParameterValues = make(map[string][]string) // Clear parameter values
 		}
 		m.State = models.MenuView
 		m.FocusedPane = models.LogFilePane
@@ -384,8 +462,48 @@ func handleMacroListViewInput(msg tea.KeyMsg, m models.Model) (models.Model, tea
 				m.InputActive = true
 
 				// Initialize parameter inputs with default values
+				m.ParameterInputs = make(map[string]string)
 				for _, param := range selectedMacro.Parameters {
 					m.ParameterInputs[param.Name] = param.DefaultValue
+				}
+
+				// For CoreProtect Pager, initialize additional fields
+				if selectedMacro.Name == "CoreProtect Pager" {
+					// Initialize available parameters for selection with all possible action parameters
+					m.AvailableParameters = []string{
+						"users",
+						"action:+block",
+						"action:+container",
+						"action:+inventory",
+						"action:+session",
+						"action:-block",
+						"action:-container",
+						"action:-inventory",
+						"action:-item",
+						"action:-session",
+						"action:block",
+						"action:chat",
+						"action:click",
+						"action:command",
+						"action:container",
+						"action:inventory",
+						"action:item",
+						"action:kill",
+						"action:session",
+						"action:sign",
+						"action:username",
+						"radius",
+						"time",
+					}
+
+					// Initialize parameter values map for multi-value parameters
+					m.ParameterValues = make(map[string][]string)
+
+					// Initialize MacroParameters with default values
+					m.MacroParameters = make(map[string]string)
+					for _, param := range selectedMacro.Parameters {
+						m.MacroParameters[param.Name] = param.DefaultValue
+					}
 				}
 			} else {
 				// No parameters, go straight to countdown
@@ -483,6 +601,28 @@ func handleMacroParameterInputViewInput(msg tea.KeyMsg, m models.Model) (models.
 		return m, nil
 	}
 
+	// Special handling for CoreProtect Pager
+	if selectedMacro.Name == "CoreProtect Pager" {
+		// Check if cursor is on the "Add Parameter" button
+		if m.ParameterCursor == len(selectedMacro.Parameters) {
+			switch msg.String() {
+			case "enter":
+				// Go to parameter selection view
+				m.State = models.ParameterSelectionView
+				m.ParameterCursor = 0
+				return m, nil
+			case "tab":
+				// Wrap around to first parameter
+				m.ParameterCursor = 0
+				return m, nil
+			case "shift+tab":
+				// Move to last parameter
+				m.ParameterCursor = len(selectedMacro.Parameters) - 1
+				return m, nil
+			}
+		}
+	}
+
 	// Make sure cursor is in valid range
 	if m.ParameterCursor >= len(selectedMacro.Parameters) {
 		m.ParameterCursor = len(selectedMacro.Parameters) - 1
@@ -493,6 +633,13 @@ func handleMacroParameterInputViewInput(msg tea.KeyMsg, m models.Model) (models.
 	switch msg.String() {
 	case "ctrl+c":
 		return m, tea.Quit
+	case "ctrl+e":
+		// If it's CoreProtect Pager, go to parameter selection view
+		if selectedMacro.Name == "CoreProtect Pager" {
+			m.State = models.ParameterSelectionView
+			m.ParameterCursor = 0
+			return m, nil
+		}
 	case "esc":
 		// Cancel parameter input and go back to macro list
 		m.State = models.MacroListView
@@ -504,6 +651,9 @@ func handleMacroParameterInputViewInput(msg tea.KeyMsg, m models.Model) (models.
 		// Move to next parameter field
 		if m.ParameterCursor < len(selectedMacro.Parameters)-1 {
 			m.ParameterCursor++
+		} else if selectedMacro.Name == "CoreProtect Pager" {
+			// For CoreProtect Pager, move to the "Add Parameter" button
+			m.ParameterCursor = len(selectedMacro.Parameters)
 		} else {
 			m.ParameterCursor = 0 // Wrap around to first parameter
 		}
@@ -511,18 +661,76 @@ func handleMacroParameterInputViewInput(msg tea.KeyMsg, m models.Model) (models.
 		// Move to previous parameter field
 		if m.ParameterCursor > 0 {
 			m.ParameterCursor--
+		} else if selectedMacro.Name == "CoreProtect Pager" {
+			// For CoreProtect Pager, move to the "Add Parameter" button
+			m.ParameterCursor = len(selectedMacro.Parameters)
 		} else {
 			m.ParameterCursor = len(selectedMacro.Parameters) - 1 // Wrap around to last parameter
 		}
 	case "enter":
-		// Save all parameters and move to countdown
+		// Save parameters and move to countdown
 		m.MacroParameters = make(map[string]string)
-		for _, param := range selectedMacro.Parameters {
-			value, exists := m.ParameterInputs[param.Name]
-			if exists {
-				m.MacroParameters[param.Name] = value
+
+		// For CoreProtect Pager, handle parameters with complete separation
+		if selectedMacro.Name == "CoreProtect Pager" {
+			// ONLY save the basic paging parameters from the input fields
+			// These are used for the "/co page" commands
+			startPage, exists := m.ParameterInputs["startPage"]
+			if exists && startPage != "" {
+				m.MacroParameters["startPage"] = startPage
 			} else {
-				m.MacroParameters[param.Name] = param.DefaultValue
+				m.MacroParameters["startPage"] = "1" // Default
+			}
+
+			endPage, exists := m.ParameterInputs["endPage"]
+			if exists && endPage != "" {
+				m.MacroParameters["endPage"] = endPage
+			} else {
+				m.MacroParameters["endPage"] = "5" // Default
+			}
+
+			delayMs, exists := m.ParameterInputs["delayMs"]
+			if exists && delayMs != "" {
+				m.MacroParameters["delayMs"] = delayMs
+			} else {
+				m.MacroParameters["delayMs"] = "500" // Default
+			}
+
+			// SEPARATELY handle the lookup parameters
+			// These are used for the "/co lookup" command
+
+			// Users
+			if users, ok := m.ParameterValues["users"]; ok && len(users) > 0 {
+				m.MacroParameters["users"] = strings.Join(users, ",")
+			}
+
+			// Actions
+			if actions, ok := m.ParameterValues["actions"]; ok && len(actions) > 0 {
+				m.MacroParameters["actions"] = strings.Join(actions, ",")
+			}
+
+			// Radius (single value parameter)
+			if m.MacroParameters["radius"] == "" { // Only set if not already set
+				if radius, ok := m.ParameterInputs["radius"]; ok && radius != "" {
+					m.MacroParameters["radius"] = radius
+				}
+			}
+
+			// Time (single value parameter)
+			if m.MacroParameters["time"] == "" { // Only set if not already set
+				if timeParam, ok := m.ParameterInputs["time"]; ok && timeParam != "" {
+					m.MacroParameters["time"] = timeParam
+				}
+			}
+		} else {
+			// For other macros, handle parameters normally
+			for _, param := range selectedMacro.Parameters {
+				value, exists := m.ParameterInputs[param.Name]
+				if exists {
+					m.MacroParameters[param.Name] = value
+				} else {
+					m.MacroParameters[param.Name] = param.DefaultValue
+				}
 			}
 		}
 
@@ -548,6 +756,158 @@ func handleMacroParameterInputViewInput(msg tea.KeyMsg, m models.Model) (models.
 				currentValue = ""
 			}
 			m.ParameterInputs[currentParam.Name] = currentValue + string(msg.Runes)
+		}
+	}
+	return m, nil
+}
+
+// handleParameterSelectionViewInput handles input when in parameter selection view
+func handleParameterSelectionViewInput(msg tea.KeyMsg, m models.Model) (models.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		// Go back to parameter input view
+		m.State = models.MacroParameterInputView
+		return m, nil
+	case "ctrl+d":
+		// Done with parameters, go to countdown
+		m.State = models.CountdownInputView
+		m.CountdownInput = ""
+		m.CountdownMessage = ""
+		m.InputActive = true
+		return m, nil
+	case "up", "k":
+		// Move cursor up
+		if m.ParameterCursor > 0 {
+			m.ParameterCursor--
+		}
+	case "down", "j":
+		// Move cursor down
+		if m.ParameterCursor < len(m.AvailableParameters)-1 {
+			m.ParameterCursor++
+		}
+	case "enter":
+		// Select parameter
+		if m.ParameterCursor < len(m.AvailableParameters) {
+			selectedParam := m.AvailableParameters[m.ParameterCursor]
+
+			// Check if it's an action parameter
+			if strings.HasPrefix(selectedParam, "action:") {
+				// For action parameters, add them directly to the active parameters
+				actionType := strings.TrimPrefix(selectedParam, "action:")
+
+				// Initialize the actions slice if needed
+				if m.ParameterValues["actions"] == nil {
+					m.ParameterValues["actions"] = []string{}
+				}
+
+				// Add the action to the list
+				m.ParameterValues["actions"] = append(m.ParameterValues["actions"], actionType)
+
+				// DO NOT update MacroParameters at all
+				// We'll only combine parameters at the very end when executing the macro
+				// This ensures complete separation and prevents any corruption
+
+				// Set a success message to indicate the parameter was added (will be displayed in green)
+				m.ParameterMessage = fmt.Sprintf("SUCCESS: Action parameter '%s' added", actionType)
+
+				// Return to the parameter input view
+				m.State = models.MacroParameterInputView
+				return m, nil
+			} else {
+				// For other parameters (users, radius, time)
+				m.SelectedParameter = selectedParam
+
+				// Initialize parameter value input
+				m.ParameterValueInput = ""
+				m.ParameterValueMessage = ""
+
+				// Initialize parameter values map if needed
+				if m.ParameterValues == nil {
+					m.ParameterValues = make(map[string][]string)
+				}
+
+				// Go to parameter value input view
+				m.State = models.ParameterValueInputView
+			}
+		}
+	}
+	return m, nil
+}
+
+// handleParameterValueInputViewInput handles input when in parameter value input view
+func handleParameterValueInputViewInput(msg tea.KeyMsg, m models.Model) (models.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		// Go back to parameter selection view
+		m.State = models.ParameterSelectionView
+		return m, nil
+	case "enter":
+		// Add parameter value
+		if m.ParameterValueInput != "" {
+			// For user parameter
+			if m.SelectedParameter == "users" {
+				// Initialize the slice if needed
+				if m.ParameterValues["users"] == nil {
+					m.ParameterValues["users"] = []string{}
+				}
+
+				// Add the value to the slice
+				m.ParameterValues["users"] = append(
+					m.ParameterValues["users"],
+					m.ParameterValueInput,
+				)
+
+				// DO NOT update MacroParameters at all
+				// We'll only combine parameters at the very end when executing the macro
+				// This ensures complete separation and prevents any corruption
+
+				// Clear the input for another value
+				m.ParameterValueInput = ""
+				m.ParameterValueMessage = "User added. Enter another or press ESC to go back."
+			} else {
+				// For single-value parameters (radius, time)
+				if m.SelectedParameter == "radius" || m.SelectedParameter == "time" {
+					// Store in a separate field to avoid mixing with paging parameters
+					if m.ParameterValues[m.SelectedParameter] == nil {
+						m.ParameterValues[m.SelectedParameter] = []string{}
+					}
+					m.ParameterValues[m.SelectedParameter] = []string{m.ParameterValueInput}
+
+					// DO NOT update MacroParameters at all
+					// We'll only combine parameters at the very end when executing the macro
+					// This ensures complete separation and prevents any corruption
+
+					// Set a success message to indicate the parameter was added
+					m.ParameterMessage = fmt.Sprintf("SUCCESS: %s parameter set to '%s'",
+						m.SelectedParameter, m.ParameterValueInput)
+				} else {
+					// For other parameters (not lookup related)
+					// Store directly in MacroParameters
+					if m.MacroParameters == nil {
+						m.MacroParameters = make(map[string]string)
+					}
+					m.MacroParameters[m.SelectedParameter] = m.ParameterValueInput
+				}
+
+				// Go back to parameter selection
+				m.State = models.ParameterSelectionView
+			}
+		} else {
+			m.ParameterValueMessage = "Value cannot be empty"
+		}
+	case "backspace":
+		// Delete character from input
+		if len(m.ParameterValueInput) > 0 {
+			m.ParameterValueInput = m.ParameterValueInput[:len(m.ParameterValueInput)-1]
+		}
+	default:
+		// Add character to input
+		if msg.Type == tea.KeyRunes && len(msg.Runes) > 0 {
+			m.ParameterValueInput += string(msg.Runes)
 		}
 	}
 	return m, nil

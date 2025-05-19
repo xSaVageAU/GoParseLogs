@@ -15,6 +15,8 @@ const (
 	SaveInputView                           // View for entering filename to save
 	MacroListView                           // View for displaying list of macros
 	MacroParameterInputView                 // View for entering macro parameters
+	ParameterSelectionView                  // View for selecting which parameter to add
+	ParameterValueInputView                 // View for entering value for a selected parameter
 	CountdownInputView                      // View for entering countdown time
 	CountdownDisplayView                    // View for showing countdown progress
 )
@@ -68,13 +70,18 @@ type Model struct {
 	CountdownActive bool // True when countdown is running
 
 	// Macro List View (Right Pane when "Macros" is selected)
-	MacroChoices      []string          // List of available macros
-	MacroCursor       int               // Cursor for MacroChoices
-	SelectedMacroName string            // Currently selected macro name
-	MacroParameters   map[string]string // Parameters for the selected macro
-	ParameterCursor   int               // Cursor for parameter selection
-	ParameterInputs   map[string]string // Current parameter input values (temporary storage)
-	ParameterMessage  string            // Message for parameter input validation
+	MacroChoices          []string            // List of available macros
+	MacroCursor           int                 // Cursor for MacroChoices
+	SelectedMacroName     string              // Currently selected macro name
+	MacroParameters       map[string]string   // Parameters for the selected macro
+	ParameterCursor       int                 // Cursor for parameter selection
+	ParameterInputs       map[string]string   // Current parameter input values (temporary storage)
+	ParameterMessage      string              // Message for parameter input validation
+	AvailableParameters   []string            // List of available parameters to select from
+	SelectedParameter     string              // Currently selected parameter
+	ParameterValues       map[string][]string // Values for parameters that can have multiple values (e.g., users, actions)
+	ParameterValueInput   string              // Current input for parameter value
+	ParameterValueMessage string              // Message for parameter value input validation
 
 	// Styles
 	HighlightStyle    lipgloss.Style

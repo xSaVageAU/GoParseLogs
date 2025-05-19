@@ -5,7 +5,6 @@ import (
 	"goparselogs/internal/macros/scripts"
 	"os"      // For reading directory contents
 	"strings" // For string manipulation
-	"time"
 )
 
 // Macro represents a defined macro.
@@ -83,12 +82,13 @@ func ExecuteMacro(macroName string) error {
 		return fmt.Errorf("macro '%s' has no action defined", macroName)
 	}
 
-	fmt.Println("Starting in...")
-	for i := 10; i > 0; i-- {
-		fmt.Printf("%d...\n", i)
-		time.Sleep(1 * time.Second)
-	}
-	fmt.Println("Executing now!")
+	// Removed hardcoded countdown - countdown is now handled by the UI
+	// fmt.Println("Starting in...")
+	// for i := 10; i > 0; i-- {
+	// 	fmt.Printf("%d...\n", i)
+	// 	time.Sleep(1 * time.Second)
+	// }
+	// fmt.Println("Executing now!")
 
 	return selectedMacro.Action()
 }

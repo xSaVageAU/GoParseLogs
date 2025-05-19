@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"goparselogs/internal/fileops"
-	"goparselogs/internal/macros" // Import the macros package
+	"goparselogs/internal/macros"
 	"goparselogs/internal/models"
 	"goparselogs/pkg/coreprotectparser"
 	"goparselogs/pkg/logparser"
@@ -19,6 +19,12 @@ type scanLogsMsg struct {
 	files []string
 	err   error
 }
+
+// countdownTickMsg is sent on each countdown tick
+type countdownTickMsg struct{}
+
+// countdownCompleteMsg is sent when countdown finishes
+type countdownCompleteMsg struct{}
 
 // scanLogsDirCmd rescans the logs directory for changes
 func scanLogsDirCmd() tea.Cmd {
@@ -113,6 +119,10 @@ func Update(msg tea.Msg, m models.Model) (models.Model, tea.Cmd) {
 			return handleSaveInputViewInput(msg, m)
 		case models.MacroListView:
 			return handleMacroListViewInput(msg, m)
+		case models.CountdownInputView:
+			return handleCountdownInputViewInput(msg, m)
+		case models.CountdownDisplayView:
+			return handleCountdownDisplayViewInput(msg, m)
 		}
 
 	case []logparser.LogEntry:
@@ -143,6 +153,42 @@ func Update(msg tea.Msg, m models.Model) (models.Model, tea.Cmd) {
 	case error:
 		m.Err = msg
 		return m, periodicScanCmd()
+
+	case countdownTickMsg:
+		if m.CountdownValue > 0 {
+			m.CountdownValue--
+			return m, tea.Tick(time.Second, func(time.Time) tea.Msg { return countdownTickMsg{} })
+		}
+		// Countdown complete - execute macro and return to menu
+		if m.SelectedMacroName != "" {
+			// Execute the selected macro
+			err := macros.ExecuteMacro(m.SelectedMacroName)
+			if err != nil {
+				m.Err = err
+			}
+			m.SelectedMacroName = ""
+		}
+		m.State = models.MenuView
+		m.FocusedPane = models.LogFilePane
+		m.InputActive = false
+		m.CountdownActive = false
+		return m, nil
+
+	case countdownCompleteMsg:
+		m.State = models.MenuView
+		m.FocusedPane = models.LogFilePane
+		m.InputActive = false
+		m.CountdownActive = false
+		m.CountdownValue = 0
+		// Execute the selected macro
+		if m.SelectedMacroName != "" {
+			go func() {
+				// In a real implementation, this would execute the macro
+				// macros.ExecuteMacro(m.SelectedMacroName)
+			}()
+			m.SelectedMacroName = ""
+		}
+		return m, nil
 	}
 
 	return m, cmd
@@ -310,24 +356,15 @@ func handleMacroListViewInput(msg tea.KeyMsg, m models.Model) (models.Model, tea
 		}
 	case "enter":
 		if m.FocusedPane == models.MacroListPane && len(m.MacroChoices) > 0 && m.MacroCursor < len(m.MacroChoices) {
-			selectedMacroName := m.MacroChoices[m.MacroCursor]
-			// It's good practice to run potentially long-running tasks or
-			// tasks with side effects (like robotgo) as a command.
-			// However, for simplicity in this step, we'll call it directly.
-			// A more robust solution would involve a tea.Cmd that sends a msg back on completion/error.
-			// For now, the countdown and execution will block the UI thread.
-			// This is NOT ideal for a real TUI app but simplifies this step.
-			go func() { // Run in a goroutine to avoid blocking UI for too long during countdown
-				err := macros.ExecuteMacro(selectedMacroName)
-				if err != nil {
-					// How to send this error back to the model to display?
-					// This needs a new tea.Msg type and handling in the main Update.
-					// For now, just print to console.
-					fmt.Printf("Error executing macro %s: %v\n", selectedMacroName, err)
-				}
-			}()
-			// Provide immediate feedback in the UI if possible, or a "running..." message.
-			// m.SaveMessage = fmt.Sprintf("Executing '%s'...", selectedMacroName) // This would require a re-render
+			m.SelectedMacroName = m.MacroChoices[m.MacroCursor]
+
+			// Show countdown input before executing macro
+			m.PreviousState = m.State
+			m.State = models.CountdownInputView
+			m.CountdownInput = ""
+			m.CountdownMessage = ""
+			m.InputActive = true
+			// Removed direct macro execution here
 		}
 	case "esc":
 		m.State = models.MenuView
@@ -387,6 +424,63 @@ func saveFileCmd(m models.Model) tea.Cmd {
 		}
 		return models.SaveSuccessMsg{Filename: m.SaveFilenameInput}
 	}
+}
+
+// handleCountdownInputViewInput handles input when in countdown input view
+func handleCountdownInputViewInput(msg tea.KeyMsg, m models.Model) (models.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.State = m.PreviousState
+		m.CountdownInput = ""
+		m.CountdownMessage = ""
+		m.FocusedPane = models.LogFilePane
+		m.InputActive = false
+	case "enter":
+		if m.CountdownInput != "" {
+			// Validate countdown input is a positive integer
+			var seconds int
+			_, err := fmt.Sscanf(m.CountdownInput, "%d", &seconds)
+			if err != nil || seconds <= 0 {
+				m.CountdownMessage = "Invalid time - must be positive number"
+				return m, nil
+			}
+
+			m.CountdownValue = seconds
+			m.CountdownActive = true
+			m.State = models.CountdownDisplayView
+			m.CountdownInput = ""
+			m.CountdownMessage = ""
+			return m, tea.Tick(time.Second, func(time.Time) tea.Msg { return countdownTickMsg{} })
+		} else {
+			m.CountdownMessage = "Time cannot be empty"
+		}
+	case "backspace":
+		if len(m.CountdownInput) > 0 {
+			m.CountdownInput = m.CountdownInput[:len(m.CountdownInput)-1]
+		}
+	default:
+		if msg.Type == tea.KeyRunes && len(msg.Runes) > 0 {
+			m.CountdownInput += string(msg.Runes)
+		}
+	}
+	return m, nil
+}
+
+// handleCountdownDisplayViewInput handles input when in countdown display view
+func handleCountdownDisplayViewInput(msg tea.KeyMsg, m models.Model) (models.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.State = models.MenuView
+		m.FocusedPane = models.LogFilePane
+		m.InputActive = false
+		m.CountdownActive = false
+		m.CountdownValue = 0
+	}
+	return m, nil
 }
 
 // loadLogFileCmd is a command that sends the loaded entries back as a message

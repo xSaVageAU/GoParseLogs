@@ -10,10 +10,12 @@ import (
 type AppState int
 
 const (
-	MenuView      AppState = iota // Main menu with log files and filter input
-	LogView                       // View for displaying logs
-	SaveInputView                 // View for entering filename to save
-	MacroListView                 // View for displaying list of macros
+	MenuView             AppState = iota // Main menu with log files and filter input
+	LogView                              // View for displaying logs
+	SaveInputView                        // View for entering filename to save
+	MacroListView                        // View for displaying list of macros
+	CountdownInputView                   // View for entering countdown time
+	CountdownDisplayView                 // View for showing countdown progress
 )
 
 // Messages for save operation
@@ -56,9 +58,18 @@ type Model struct {
 	SaveFilenameInput string
 	SaveMessage       string // To display "Saved!" or "Error saving."
 
+	// Countdown Input View
+	CountdownInput   string // Current countdown time input
+	CountdownMessage string // To display validation messages
+
+	// Countdown Display View
+	CountdownValue  int  // Current countdown value in seconds
+	CountdownActive bool // True when countdown is running
+
 	// Macro List View (Right Pane when "Macros" is selected)
-	MacroChoices []string // List of available macros
-	MacroCursor  int      // Cursor for MacroChoices
+	MacroChoices      []string // List of available macros
+	MacroCursor       int      // Cursor for MacroChoices
+	SelectedMacroName string   // Currently selected macro name
 
 	// Styles
 	HighlightStyle    lipgloss.Style

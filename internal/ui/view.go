@@ -33,6 +33,16 @@ func View(m models.Model) string {
 		finalView.WriteString(renderLogView(m)) // Render the background
 		finalView.WriteString("\n")
 		finalView.WriteString(renderSaveInputView(m)) // Overlay the save dialog
+	case models.CountdownInputView:
+		// For countdown input, we use a modal overlay
+		finalView.WriteString(renderLogView(m)) // Render the background
+		finalView.WriteString("\n")
+		finalView.WriteString(renderCountdownInputView(m)) // Overlay the countdown input
+	case models.CountdownDisplayView:
+		// For countdown display, we use a modal overlay
+		finalView.WriteString(renderLogView(m)) // Render the background
+		finalView.WriteString("\n")
+		finalView.WriteString(renderCountdownDisplayView(m)) // Overlay the countdown display
 	default:
 		// For all other states, use the split view
 		finalView.WriteString(renderLogView(m))

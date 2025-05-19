@@ -2,6 +2,7 @@ package scripts
 
 import (
 	"fmt"
+	"goparselogs/internal/macros"
 	"strconv"
 	"time"
 
@@ -66,4 +67,30 @@ func RunCoreProtectPager(params map[string]string) error {
 
 	fmt.Println("CoreProtect pager completed successfully")
 	return nil
+}
+
+// init registers this macro with the macro registry
+func init() {
+	macros.RegisterMacro(macros.Macro{
+		Name:        "CoreProtect Pager",
+		Description: "Runs /co page X commands from a start page to an end page.",
+		Parameters: []macros.MacroParameter{
+			{
+				Name:         "startPage",
+				Description:  "Starting page number",
+				DefaultValue: "1",
+			},
+			{
+				Name:         "endPage",
+				Description:  "Ending page number",
+				DefaultValue: "5",
+			},
+			{
+				Name:         "delayMs",
+				Description:  "Delay in milliseconds between commands (optional)",
+				DefaultValue: "500",
+			},
+		},
+		Action: RunCoreProtectPager,
+	})
 }

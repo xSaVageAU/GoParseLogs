@@ -1,0 +1,65 @@
+package macros
+
+import (
+	"fmt"
+)
+
+// RegisterTemplateMacro registers a template macro
+// Copy this function and modify it to create your own macro
+func RegisterTemplateMacro() {
+	RegisterMacro(Macro{
+		Name:        "Template Macro", // User-friendly name shown in the UI
+		Description: "Description of what this macro does", // Detailed description
+		Parameters: []MacroParameter{
+			{
+				Name:         "param1",
+				Description:  "Description of parameter 1",
+				DefaultValue: "default", // Optional default value
+			},
+			// Add more parameters as needed
+			// {
+			//     Name:         "param2",
+			//     Description:  "Description of parameter 2",
+			//     DefaultValue: "",
+			// },
+		},
+		Action: func(params map[string]string) error {
+			// Get parameters from the params map
+			param1, ok := params["param1"]
+			if !ok {
+				return fmt.Errorf("param1 is required")
+			}
+
+			// Your macro implementation goes here
+			fmt.Printf("Template macro executed with param1: %s\n", param1)
+			
+			return nil
+		},
+	})
+}
+
+/*
+HOW TO CREATE A NEW MACRO:
+
+1. Copy this template function to the internal/macros/macros.go file
+
+2. Rename the function and update the macro registration:
+   - Rename RegisterTemplateMacro to something descriptive of your macro
+   - Update the Name and Description in the RegisterMacro call
+   - Define the parameters your macro needs
+   - Implement your macro logic in the Action function
+
+3. Add a call to your registration function in cmd/main.go:
+   ```go
+   func main() {
+       // Register macros
+       macros.RegisterHelloWorldMacro()
+       macros.RegisterCoreProtectPagerMacro()
+       macros.RegisterYourNewMacro() // Add your new macro here
+       
+       // ...
+   }
+   ```
+
+4. That's it! Your macro will be listed in the UI when the application starts.
+*/

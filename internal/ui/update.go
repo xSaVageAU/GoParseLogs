@@ -81,9 +81,10 @@ func Update(msg tea.Msg, m models.Model) (models.Model, tea.Cmd) {
 		}
 
 		// Create new menu choices with updated log files
-		newChoices := make([]string, 0, len(msg.files)+2)
+		newChoices := make([]string, 0, len(msg.files)+3) // +3 for Macros, toggle, exit
 		newChoices = append(newChoices, msg.files...)
 		newChoices = append(newChoices,
+			MacrosText, // Add Macros option
 			fmt.Sprintf("%s (%s)", CoreProtectToggleBaseText, map[bool]string{true: "ON", false: "OFF"}[m.CoreProtectMode]),
 			ExitText,
 		)
@@ -109,6 +110,8 @@ func Update(msg tea.Msg, m models.Model) (models.Model, tea.Cmd) {
 			return handleLogViewInput(msg, m)
 		case models.SaveInputView:
 			return handleSaveInputViewInput(msg, m)
+		case models.MacroListView:
+			return handleMacroListViewInput(msg, m)
 		}
 
 	case []logparser.LogEntry:
@@ -167,19 +170,38 @@ func handleMenuViewInput(msg tea.KeyMsg, m models.Model) (models.Model, tea.Cmd)
 			selectedChoice := m.MenuChoices[m.MenuCursor]
 			if selectedChoice == ExitText {
 				return m, tea.Quit
+			} else if selectedChoice == MacrosText {
+				m.State = models.MacroListView
+				m.FocusedPane = models.MacroListPane // Focus the macro list in the right pane
+				m.MacroCursor = 0                    // Reset macro cursor
+				m.SaveMessage = ""                   // Clear any previous save message
+				m.Err = nil                          // Clear any previous error
+				return m, nil
 			} else if strings.HasPrefix(selectedChoice, CoreProtectToggleBaseText) {
 				m.CoreProtectMode = !m.CoreProtectMode
+				// Update the menu choice text directly
+				for i, choice := range m.MenuChoices {
+					if strings.HasPrefix(choice, CoreProtectToggleBaseText) {
+						statusText := "OFF"
+						if m.CoreProtectMode {
+							statusText = "ON"
+						}
+						m.MenuChoices[i] = fmt.Sprintf("%s (%s)", CoreProtectToggleBaseText, statusText)
+						break
+					}
+				}
 				return m, nil
-			} else {
+			} else { // It's a log file
 				m.State = models.LogView
 				m.LogEntries = []logparser.LogEntry{}
 				m.CoreProtectLogEntries = []coreprotectparser.CoreProtectLogEntry{}
 				m.LogCursor = 0
 				m.Err = nil
+				m.SaveMessage = ""
 				return m, loadLogFileCmd(selectedChoice, m.Filters, m.CoreProtectMode)
 			}
 		}
-	} else if m.FocusedPane == models.FilterPane {
+	} else if m.FocusedPane == models.FilterPane { // Input for filter
 		switch msg.String() {
 		case "q":
 			if m.FilterInput == "" {
@@ -261,6 +283,43 @@ func handleLogViewInput(msg tea.KeyMsg, m models.Model) (models.Model, tea.Cmd) 
 			m.FocusedPane = models.LogFilePane
 			m.InputActive = false
 		}
+	}
+	// If in LogView and focused on LogFilePane (left pane, but not filter input),
+	// TAB should still switch to filter input if available.
+	if m.State == models.LogView && m.FocusedPane == models.LogFilePane && !m.CoreProtectMode && msg.String() == "tab" {
+		m.FocusedPane = models.FilterPane
+		m.InputActive = true
+	}
+
+	return m, nil
+}
+
+// handleMacroListViewInput handles input when in macro list view
+func handleMacroListViewInput(msg tea.KeyMsg, m models.Model) (models.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q":
+		// Currently, 'q' does nothing here. 'esc' is used to go back.
+	case "up", "k":
+		if m.FocusedPane == models.MacroListPane && m.MacroCursor > 0 {
+			m.MacroCursor--
+		}
+	case "down", "j":
+		if m.FocusedPane == models.MacroListPane && m.MacroCursor < len(m.MacroChoices)-1 {
+			m.MacroCursor++
+		}
+	case "enter":
+		if m.FocusedPane == models.MacroListPane && len(m.MacroChoices) > 0 && m.MacroCursor < len(m.MacroChoices) {
+			// Placeholder for macro execution
+			// m.SaveMessage = fmt.Sprintf("Macro '%s' selected (not implemented yet).", m.MacroChoices[m.MacroCursor])
+		}
+	case "esc":
+		m.State = models.MenuView
+		m.FocusedPane = models.LogFilePane
+		m.InputActive = false
+		m.SaveMessage = ""
+	case "tab":
+		m.FocusedPane = models.LogFilePane
+		m.InputActive = false
 	}
 	return m, nil
 }

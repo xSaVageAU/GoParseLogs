@@ -95,7 +95,19 @@ func renderLogView(m models.Model) string {
 	}
 
 	if rightPaneWidth <= 10 {
-		rightPane.WriteString(m.ErrorStyle.Render("Terminal too narrow for logs."))
+		rightPane.WriteString(m.ErrorStyle.Render("Terminal too narrow."))
+	} else if m.State == models.MacroListView {
+		// Call the dedicated function to render the macro list
+		// Note: We pass 'rightPane' builder directly to styledRightPane later.
+		// So, renderMacroListView should return the string to be set for styledRightPane.
+		// For now, we'll let renderMacroListView handle its own styling and width.
+		// This means the styledRightPane will effectively be the result of renderMacroListView.
+		// This is a slight departure but simplifies the call here.
+		// The alternative is renderMacroListView writes to 'rightPane' builder,
+		// but then it can't apply its own m.RightPaneStyle.Copy().Width().Render().
+		// Let's assume renderMacroListView returns a fully styled string.
+		// We will assign its result to styledRightPane directly later.
+		// For now, this 'else if' block for MacroListView will be handled differently below.
 	} else if m.State == models.MenuView {
 		// Custom message when no file is selected
 		rightPane.WriteString("Select a log file from the left panel to view its contents.\n\n")
@@ -196,7 +208,12 @@ func renderLogView(m models.Model) string {
 		}
 	}
 
-	styledRightPane := m.RightPaneStyle.Width(rightPaneWidth).Render(rightPane.String())
+	var styledRightPane string
+	if m.State == models.MacroListView {
+		styledRightPane = renderMacroListView(m, rightPaneWidth)
+	} else {
+		styledRightPane = m.RightPaneStyle.Width(rightPaneWidth).Render(rightPane.String())
+	}
 
 	// Combine panes horizontally
 	return lipgloss.JoinHorizontal(lipgloss.Top, styledLeftPane, styledRightPane)

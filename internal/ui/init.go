@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"goparselogs/internal/fileops"
+	"goparselogs/internal/macros" // Import the new macros package
 	"goparselogs/internal/models"
 	"goparselogs/pkg/coreprotectparser"
 	"goparselogs/pkg/logparser"
@@ -13,6 +14,7 @@ import (
 
 const (
 	CoreProtectToggleBaseText = "Toggle CoreProtect Parsing"
+	MacrosText                = "Macros"
 	ExitText                  = "Exit"
 )
 
@@ -26,9 +28,10 @@ func createInitialState() models.Model {
 	}
 
 	// Create menu choices with log files
-	menuChoices := make([]string, 0, len(logFiles)+2) // +2 for toggle and exit
+	menuChoices := make([]string, 0, len(logFiles)+3) // +3 for Macros, toggle, and exit
 	menuChoices = append(menuChoices, logFiles...)
 	menuChoices = append(menuChoices,
+		MacrosText,
 		fmt.Sprintf("%s (OFF)", CoreProtectToggleBaseText),
 		ExitText,
 	)
@@ -76,6 +79,8 @@ func createInitialState() models.Model {
 		LogEntries:            []logparser.LogEntry{},
 		CoreProtectLogEntries: []coreprotectparser.CoreProtectLogEntry{},
 		LogCursor:             0,
+		MacroChoices:          macros.GetMacroNames(), // Use the function from the macros package
+		MacroCursor:           0,
 		HighlightStyle:        highlightStyle,
 		SubtleStyle:           subtleStyle,
 		InputStyle:            inputStyle,

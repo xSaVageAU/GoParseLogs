@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"goparselogs/internal/fileops"
+	"goparselogs/internal/macros" // Import the macros package
 	"goparselogs/internal/models"
 	"goparselogs/pkg/coreprotectparser"
 	"goparselogs/pkg/logparser"
@@ -309,8 +310,24 @@ func handleMacroListViewInput(msg tea.KeyMsg, m models.Model) (models.Model, tea
 		}
 	case "enter":
 		if m.FocusedPane == models.MacroListPane && len(m.MacroChoices) > 0 && m.MacroCursor < len(m.MacroChoices) {
-			// Placeholder for macro execution
-			// m.SaveMessage = fmt.Sprintf("Macro '%s' selected (not implemented yet).", m.MacroChoices[m.MacroCursor])
+			selectedMacroName := m.MacroChoices[m.MacroCursor]
+			// It's good practice to run potentially long-running tasks or
+			// tasks with side effects (like robotgo) as a command.
+			// However, for simplicity in this step, we'll call it directly.
+			// A more robust solution would involve a tea.Cmd that sends a msg back on completion/error.
+			// For now, the countdown and execution will block the UI thread.
+			// This is NOT ideal for a real TUI app but simplifies this step.
+			go func() { // Run in a goroutine to avoid blocking UI for too long during countdown
+				err := macros.ExecuteMacro(selectedMacroName)
+				if err != nil {
+					// How to send this error back to the model to display?
+					// This needs a new tea.Msg type and handling in the main Update.
+					// For now, just print to console.
+					fmt.Printf("Error executing macro %s: %v\n", selectedMacroName, err)
+				}
+			}()
+			// Provide immediate feedback in the UI if possible, or a "running..." message.
+			// m.SaveMessage = fmt.Sprintf("Executing '%s'...", selectedMacroName) // This would require a re-render
 		}
 	case "esc":
 		m.State = models.MenuView

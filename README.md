@@ -1,9 +1,8 @@
 # GoParseLogs
 
-A terminal-based log viewer for parsing and filtering log files. Supports both plain text logs and gzipped log files.
+A terminal-based log viewer for parsing and filtering Minecraft logs. Works with both client and server log files, supporting plain text and gzipped formats.
 
 ![GoParseLogs](https://github.com/user-attachments/assets/ca0fd566-364e-47fb-8335-fb104d556140)
-
 
 ## Features
 
@@ -16,24 +15,29 @@ A terminal-based log viewer for parsing and filtering log files. Supports both p
 
 ## Requirements
 
-### Pre-built Package
-Download the latest release from the [releases page](https://github.com/xSaVageAU/GoParseLogs/releases) for your platform.
+### Pre-built Package (Windows Only)
+Download the latest Windows release from the [releases page](https://github.com/xSaVageAU/GoParseLogs/releases).
 
 ### Building from Source
 - Go 1.20 or higher
+- Windows OS
 - Run `go build ./cmd/main.go` to build
 - Or use `go run cmd/main.go` to run directly
 
 ## Usage
 
-1. Place your log files in the `logs` directory
-2. Run the application:
-   - If using pre-built: `./goparselogs` (or `goparselogs.exe` on Windows)
+You can either:
+1. Place the application in your Minecraft client or server folder (it will automatically read from the existing `logs` directory)
+2. Or create a new `logs` directory next to the executable and place your log files there
+
+Then:
+1. Run the application:
+   - If using pre-built: `goparselogs.exe`
    - If running from source: `go run cmd/main.go`
-3. Navigate files with UP/DOWN or J/K
-4. Press TAB to add filters
-5. Press E to export filtered results
-6. Press Q or Ctrl+C to quit
+2. Navigate files with UP/DOWN or J/K
+3. Press TAB to add filters
+4. Press E to export filtered results
+5. Press Q or Ctrl+C to quit
 
 ### Keyboard Shortcuts
 

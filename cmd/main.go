@@ -11,6 +11,10 @@ import (
 )
 
 func main() {
+	fmt.Println("GoParseLogs - Starting application...")
+	fmt.Println("Note: This application uses keyboard automation which may trigger antivirus warnings.")
+	fmt.Println("If you're experiencing issues, consider adding an exception in your antivirus software.")
+
 	// Register macros directly
 	macros.RegisterHelloWorldMacro()
 	macros.RegisterCoreProtectPagerMacro()

@@ -2,6 +2,8 @@
 
 This directory contains macro scripts for the GoParseLogs application. Each script is a Go file that defines a macro that can be executed from the application.
 
+> **Note**: The current implementation has moved macro definitions directly into `internal/macros/macros.go` to avoid import cycles. The files in this directory are kept for reference but are not actively used. See the "Future Improvements" section below for a cleaner approach.
+
 ## How Macros Are Registered
 
 Macros are registered directly in the application. The registration process works as follows:
@@ -99,3 +101,37 @@ func main() {
 4. Provide sensible default values for parameters when appropriate
 5. Handle errors gracefully and return meaningful error messages
 6. Follow Go best practices for code organization and documentation
+
+## Future Improvements
+
+The current macro system has some redundancy and potential confusion in how macros are registered and structured. Here's a cleaner approach for future development:
+
+### Option 1: Script-Centric Approach
+
+1. Move all macro logic back to the scripts directory
+2. Have each script export a registration function:
+   ```go
+   // In scripts/my_macro.go
+   package scripts
+   
+   func RegisterMyMacro(registry MacroRegistry) {
+       registry.RegisterMacro(Macro{...})
+   }
+   ```
+3. In main.go, call these registration functions:
+   ```go
+   func main() {
+       registry := macros.NewRegistry()
+       scripts.RegisterHelloWorldMacro(registry)
+       scripts.RegisterCoreProtectPagerMacro(registry)
+       // ...
+   }
+   ```
+
+### Option 2: Registry-Centric Approach
+
+1. Define a proper interface for the macro registry in macros/registry.go
+2. Have scripts implement a standard registration method
+3. Use reflection or a plugin system to discover and register macros automatically
+
+Either approach would provide a cleaner separation of concerns and make the codebase more maintainable.

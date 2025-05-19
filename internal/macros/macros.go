@@ -166,6 +166,19 @@ func RegisterCoreProtectPagerMacro() {
 				// Press Enter to execute
 				robotgo.KeyTap("enter")
 
+				// Wait for a moment before opening chat again
+				time.Sleep(100 * time.Millisecond)
+
+				// Don't press 't' after the last command
+				if i < endPage {
+					// Press 't' to open chat again for the next command
+					fmt.Println("Opening chat window for next command...")
+					robotgo.KeyTap("t")
+
+					// Wait a moment after opening chat
+					time.Sleep(100 * time.Millisecond)
+				}
+
 				// Wait for the specified delay before the next command
 				time.Sleep(time.Duration(delayMs) * time.Millisecond)
 			}

@@ -81,6 +81,10 @@ func createInitialState() models.Model {
 		LogCursor:             0,
 		MacroChoices:          macros.GetMacroNames(), // Use the function from the macros package
 		MacroCursor:           0,
+		MacroParameters:       make(map[string]string), // Initialize empty parameters map
+		ParameterInputs:       make(map[string]string), // Initialize empty parameter inputs map
+		ParameterCursor:       0,                       // First parameter is selected initially
+		ParameterMessage:      "",                      // No parameter message initially
 		HighlightStyle:        highlightStyle,
 		SubtleStyle:           subtleStyle,
 		InputStyle:            inputStyle,

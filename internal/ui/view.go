@@ -33,6 +33,9 @@ func View(m models.Model) string {
 		finalView.WriteString(renderLogView(m)) // Render the background
 		finalView.WriteString("\n")
 		finalView.WriteString(renderSaveInputView(m)) // Overlay the save dialog
+	case models.MacroParameterInputView:
+		// For parameter input, we show only the parameter input view (no background)
+		finalView.WriteString(renderMacroParameterInputView(m, m.TermWidth)) // Full-width parameter input
 	case models.CountdownInputView:
 		// For countdown input, we use a modal overlay
 		finalView.WriteString(renderLogView(m)) // Render the background

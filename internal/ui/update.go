@@ -119,6 +119,8 @@ func Update(msg tea.Msg, m models.Model) (models.Model, tea.Cmd) {
 			return handleSaveInputViewInput(msg, m)
 		case models.MacroListView:
 			return handleMacroListViewInput(msg, m)
+		case models.MacroParameterInputView:
+			return handleMacroParameterInputViewInput(msg, m)
 		case models.CountdownInputView:
 			return handleCountdownInputViewInput(msg, m)
 		case models.CountdownDisplayView:
@@ -161,12 +163,14 @@ func Update(msg tea.Msg, m models.Model) (models.Model, tea.Cmd) {
 		}
 		// Countdown complete - execute macro and return to menu
 		if m.SelectedMacroName != "" {
-			// Execute the selected macro
-			err := macros.ExecuteMacro(m.SelectedMacroName)
+			// Execute the selected macro with parameters
+			err := macros.ExecuteMacro(m.SelectedMacroName, m.MacroParameters)
 			if err != nil {
 				m.Err = err
 			}
 			m.SelectedMacroName = ""
+			m.MacroParameters = make(map[string]string) // Clear parameters
+			m.ParameterInputs = make(map[string]string) // Clear parameter inputs
 		}
 		m.State = models.MenuView
 		m.FocusedPane = models.LogFilePane
@@ -358,13 +362,39 @@ func handleMacroListViewInput(msg tea.KeyMsg, m models.Model) (models.Model, tea
 		if m.FocusedPane == models.MacroListPane && len(m.MacroChoices) > 0 && m.MacroCursor < len(m.MacroChoices) {
 			m.SelectedMacroName = m.MacroChoices[m.MacroCursor]
 
-			// Show countdown input before executing macro
-			m.PreviousState = m.State
-			m.State = models.CountdownInputView
-			m.CountdownInput = ""
-			m.CountdownMessage = ""
-			m.InputActive = true
-			// Removed direct macro execution here
+			// Get the selected macro to check if it has parameters
+			var selectedMacro *macros.Macro
+			for _, macro := range macros.GetAvailableMacros() {
+				if macro.Name == m.SelectedMacroName {
+					tempMacro := macro
+					selectedMacro = &tempMacro
+					break
+				}
+			}
+
+			// Clear any existing parameters
+			m.MacroParameters = make(map[string]string)
+			m.ParameterInputs = make(map[string]string)
+
+			// If the macro has parameters, show parameter input view
+			if selectedMacro != nil && len(selectedMacro.Parameters) > 0 {
+				m.PreviousState = m.State
+				m.State = models.MacroParameterInputView
+				m.ParameterCursor = 0
+				m.InputActive = true
+
+				// Initialize parameter inputs with default values
+				for _, param := range selectedMacro.Parameters {
+					m.ParameterInputs[param.Name] = param.DefaultValue
+				}
+			} else {
+				// No parameters, go straight to countdown
+				m.PreviousState = m.State
+				m.State = models.CountdownInputView
+				m.CountdownInput = ""
+				m.CountdownMessage = ""
+				m.InputActive = true
+			}
 		}
 	case "esc":
 		m.State = models.MenuView
@@ -424,6 +454,103 @@ func saveFileCmd(m models.Model) tea.Cmd {
 		}
 		return models.SaveSuccessMsg{Filename: m.SaveFilenameInput}
 	}
+}
+
+// handleMacroParameterInputViewInput handles input when in parameter input view
+func handleMacroParameterInputViewInput(msg tea.KeyMsg, m models.Model) (models.Model, tea.Cmd) {
+	// Get the selected macro to access its parameters
+	var selectedMacro *macros.Macro
+	for _, macro := range macros.GetAvailableMacros() {
+		if macro.Name == m.SelectedMacroName {
+			tempMacro := macro
+			selectedMacro = &tempMacro
+			break
+		}
+	}
+
+	if selectedMacro == nil {
+		// Something went wrong, go back to macro list
+		m.State = models.MacroListView
+		return m, nil
+	}
+
+	// Get the current parameter
+	if len(selectedMacro.Parameters) == 0 {
+		// No parameters, go to countdown
+		m.State = models.CountdownInputView
+		m.CountdownInput = ""
+		m.CountdownMessage = ""
+		return m, nil
+	}
+
+	// Make sure cursor is in valid range
+	if m.ParameterCursor >= len(selectedMacro.Parameters) {
+		m.ParameterCursor = len(selectedMacro.Parameters) - 1
+	}
+
+	currentParam := selectedMacro.Parameters[m.ParameterCursor]
+
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		// Cancel parameter input and go back to macro list
+		m.State = models.MacroListView
+		m.ParameterInputs = make(map[string]string)
+		m.MacroParameters = make(map[string]string)
+		m.ParameterMessage = ""
+		m.ParameterCursor = 0
+	case "tab":
+		// Move to next parameter field
+		if m.ParameterCursor < len(selectedMacro.Parameters)-1 {
+			m.ParameterCursor++
+		} else {
+			m.ParameterCursor = 0 // Wrap around to first parameter
+		}
+	case "shift+tab":
+		// Move to previous parameter field
+		if m.ParameterCursor > 0 {
+			m.ParameterCursor--
+		} else {
+			m.ParameterCursor = len(selectedMacro.Parameters) - 1 // Wrap around to last parameter
+		}
+	case "enter":
+		// Save all parameters and move to countdown
+		m.MacroParameters = make(map[string]string)
+		for _, param := range selectedMacro.Parameters {
+			value, exists := m.ParameterInputs[param.Name]
+			if exists {
+				m.MacroParameters[param.Name] = value
+			} else {
+				m.MacroParameters[param.Name] = param.DefaultValue
+			}
+		}
+
+		// Move to countdown input
+		m.State = models.CountdownInputView
+		m.CountdownInput = ""
+		m.CountdownMessage = ""
+		m.InputActive = true
+	case "backspace":
+		// Delete character from current parameter input
+		currentValue := m.ParameterInputs[currentParam.Name]
+		if len(currentValue) > 0 {
+			m.ParameterInputs[currentParam.Name] = currentValue[:len(currentValue)-1]
+		}
+	default:
+		// Add character to current parameter input
+		if msg.Type == tea.KeyRunes && len(msg.Runes) > 0 {
+			if m.ParameterInputs == nil {
+				m.ParameterInputs = make(map[string]string)
+			}
+			currentValue, exists := m.ParameterInputs[currentParam.Name]
+			if !exists {
+				currentValue = ""
+			}
+			m.ParameterInputs[currentParam.Name] = currentValue + string(msg.Runes)
+		}
+	}
+	return m, nil
 }
 
 // handleCountdownInputViewInput handles input when in countdown input view

@@ -7,11 +7,19 @@ import (
 	"strings" // For string manipulation
 )
 
+// MacroParameter represents a parameter for a macro.
+type MacroParameter struct {
+	Name         string
+	Description  string
+	DefaultValue string // Optional default value
+}
+
 // Macro represents a defined macro.
 type Macro struct {
 	Name        string
 	Description string
-	Action      func() error // Function to execute for the macro
+	Parameters  []MacroParameter                     // Parameters that the macro accepts
+	Action      func(params map[string]string) error // Function to execute for the macro with parameters
 }
 
 // GetAvailableMacros scans the scripts directory and returns a list of recognized macros.
@@ -36,7 +44,33 @@ func GetAvailableMacros() []Macro {
 				availableMacros = append(availableMacros, Macro{
 					Name:        "Type 'Hello World'",
 					Description: "A macro that types 'Hello World' after a countdown.",
-					Action:      scripts.RunHelloWorld,
+					Parameters:  []MacroParameter{}, // No parameters for this simple macro
+					Action: func(params map[string]string) error {
+						return scripts.RunHelloWorld()
+					},
+				})
+			case "coreprotect_pager":
+				availableMacros = append(availableMacros, Macro{
+					Name:        "CoreProtect Pager",
+					Description: "Runs /co page X commands from a start page to an end page.",
+					Parameters: []MacroParameter{
+						{
+							Name:         "startPage",
+							Description:  "Starting page number",
+							DefaultValue: "1",
+						},
+						{
+							Name:         "endPage",
+							Description:  "Ending page number",
+							DefaultValue: "5",
+						},
+						{
+							Name:         "delayMs",
+							Description:  "Delay in milliseconds between commands (optional)",
+							DefaultValue: "500",
+						},
+					},
+					Action: scripts.RunCoreProtectPager,
 				})
 				// Add other cases here for new scripts:
 				// case "another_script_filename_without_ext":
@@ -61,9 +95,9 @@ func GetMacroNames() []string {
 	return names
 }
 
-// ExecuteMacro finds a macro by name and executes its action with a countdown.
-func ExecuteMacro(macroName string) error {
-	fmt.Printf("Executing macro: %s\n", macroName)
+// ExecuteMacro finds a macro by name and executes its action with the provided parameters.
+func ExecuteMacro(macroName string, params map[string]string) error {
+	fmt.Printf("Executing macro: %s with params: %v\n", macroName, params)
 	var selectedMacro *Macro
 	for _, m := range GetAvailableMacros() {
 		if m.Name == macroName {
@@ -82,13 +116,13 @@ func ExecuteMacro(macroName string) error {
 		return fmt.Errorf("macro '%s' has no action defined", macroName)
 	}
 
-	// Removed hardcoded countdown - countdown is now handled by the UI
-	// fmt.Println("Starting in...")
-	// for i := 10; i > 0; i-- {
-	// 	fmt.Printf("%d...\n", i)
-	// 	time.Sleep(1 * time.Second)
-	// }
-	// fmt.Println("Executing now!")
+	// Apply default values for any parameters that weren't provided
+	for _, param := range selectedMacro.Parameters {
+		if _, exists := params[param.Name]; !exists && param.DefaultValue != "" {
+			params[param.Name] = param.DefaultValue
+		}
+	}
 
-	return selectedMacro.Action()
+	// Execute the macro with the parameters
+	return selectedMacro.Action(params)
 }

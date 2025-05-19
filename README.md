@@ -2,7 +2,8 @@
 
 A terminal-based log viewer for parsing and filtering log files. Supports both plain text logs and gzipped log files.
 
-![Log Viewer Demo](demo.gif)
+![GoParseLogs](https://github.com/user-attachments/assets/ca0fd566-364e-47fb-8335-fb104d556140)
+
 
 ## Features
 
@@ -16,7 +17,7 @@ A terminal-based log viewer for parsing and filtering log files. Supports both p
 ## Requirements
 
 ### Pre-built Package
-Download the latest release from the [releases page](releases) for your platform.
+Download the latest release from the [releases page](https://github.com/xSaVageAU/GoParseLogs/releases) for your platform.
 
 ### Building from Source
 - Go 1.20 or higher

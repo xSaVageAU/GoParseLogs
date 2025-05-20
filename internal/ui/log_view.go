@@ -124,7 +124,7 @@ func renderLogView(m models.Model) string {
 
 		var currentEntriesCount int
 		if m.CoreProtectMode {
-			rightPane.WriteString("CoreProtect Log Entries (Sorted by Hours Ago):\n\n")
+			rightPane.WriteString("CoreProtect Log Entries (Sorted by Time Ago):\n\n")
 			currentEntriesCount = len(m.CoreProtectLogEntries)
 		} else {
 			rightPane.WriteString("Parsed Log Entries")
@@ -164,7 +164,25 @@ func renderLogView(m models.Model) string {
 				var line string
 				if m.CoreProtectMode {
 					entry := m.CoreProtectLogEntries[i]
-					line = fmt.Sprintf("%.2f/h ago - %s: %s", entry.HoursAgo, entry.Username, entry.Message)
+					var timeAgoStr string
+
+
+					if entry.IsInDays {
+
+
+						timeAgoStr = fmt.Sprintf("%.2f/d ago", entry.DaysAgo)
+
+
+					} else {
+
+
+						timeAgoStr = fmt.Sprintf("%.2f/h ago", entry.HoursAgo)
+
+
+					}
+
+
+					line = fmt.Sprintf("%s - %s: %s", timeAgoStr, entry.Username, entry.Message)
 				} else {
 					entry := m.LogEntries[i]
 					line = fmt.Sprintf("[%s] [%s/%s]: %s", entry.Timestamp, entry.Thread, entry.Level, entry.Message)

@@ -165,23 +165,11 @@ func renderLogView(m models.Model) string {
 				if m.CoreProtectMode {
 					entry := m.CoreProtectLogEntries[i]
 					var timeAgoStr string
-
-
 					if entry.IsInDays {
-
-
 						timeAgoStr = fmt.Sprintf("%.2f/d ago", entry.DaysAgo)
-
-
 					} else {
-
-
 						timeAgoStr = fmt.Sprintf("%.2f/h ago", entry.HoursAgo)
-
-
 					}
-
-
 					line = fmt.Sprintf("%s - %s: %s", timeAgoStr, entry.Username, entry.Message)
 				} else {
 					entry := m.LogEntries[i]
